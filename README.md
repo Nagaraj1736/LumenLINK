@@ -1,2 +1,1400 @@
 # LumenLINK
 It works like if you want to send a message you will type this in the website that will send through light as a binary or mosscode the light  signal will cathched  by the  LDR align beam and show it in the attached screen
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>LumenLink — Optical Light Transmitter & Receiver</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #050811;
+      background-image:
+        radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.08), transparent 35%),
+        radial-gradient(circle at 85% 20%, rgba(251, 191, 36, 0.08), transparent 35%);
+      color: #e2e8f0;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+    .glass-card {
+      background: rgba(13, 19, 34, 0.78);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+    }
+    .torch-glow {
+      box-shadow: 0 0 48px rgba(251, 191, 36, 0.7), 0 0 18px rgba(251, 191, 36, 0.45);
+    }
+    .pulse-ring {
+      animation: pulseRing 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.92); opacity: 0.75; }
+      75% { transform: scale(1.25); opacity: 0; }
+      100% { transform: scale(1.25); opacity: 0; }
+    }
+    input[type="range"] {
+      accent-color: #fbbf24;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-amber-400/30">
+  <!-- Full-screen Optical Flash Overlay (Fallback / Screen Emitter) -->
+  <div id="screenFlashOverlay" class="fixed inset-0 z-50 hidden flex-col items-center justify-between p-6 transition-colors duration-75 select-none">
+    <div class="w-full max-w-md flex items-center justify-between bg-slate-950/85 backdrop-blur border border-slate-700/70 rounded-2xl px-4 py-3 text-slate-100 shadow-2xl">
+      <div class="flex items-center gap-2.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+        <span class="text-sm font-semibold">Transmitting via Screen Light</span>
+      </div>
+      <button id="stopOverlayBtn" class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white transition">
+        Stop
+      </button>
+    </div>
+    <div class="bg-slate-950/85 backdrop-blur border border-slate-700/70 rounded-2xl px-6 py-4 text-center text-slate-200 max-w-sm shadow-2xl">
+      <div class="text-[11px] text-slate-400 uppercase tracking-wider mb-1">Active Symbol</div>
+      <div id="overlaySymbolText" class="mono text-xl font-bold text-amber-300">--</div>
+      <div id="overlayProgressText" class="text-xs text-slate-400 mt-1">0%</div>
+    </div>
+  </div>
+
+  <!-- LDR Arduino / ESP32 Receiver Code Modal -->
+  <div id="ldrModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div class="glass-card rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-700/70">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <i data-lucide="cpu" class="w-5 h-5 text-sky-400"></i>
+          <div>
+            <h3 class="text-sm sm:text-base font-bold text-white">LDR Sensor Module Receiver Sketch</h3>
+            <p class="text-[11px] text-slate-400">Matches your selected speed (<span id="modalSpeedText" class="text-amber-400 mono">100 ms</span>) for Arduino / ESP32</p>
+          </div>
+        </div>
+        <button id="closeLdrModalBtn" type="button" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3 text-xs">
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-slate-300 leading-relaxed">
+          <strong>Wiring:</strong> Connect LDR Module <span class="mono text-sky-300">VCC → 5V/3.3V</span>, <span class="mono text-sky-300">GND → GND</span>, <span class="mono text-sky-300">DO → Pin 2</span>. Use <strong>LDR Align Beam</strong> while turning the module's blue potentiometer until its LED turns on when your phone flashlight shines on it.
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-slate-300">Arduino / ESP32 Morse + LDR Receiver (.ino)</span>
+          <button id="copySketchBtn" type="button" class="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition flex items-center gap-1.5">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copy Sketch</span>
+          </button>
+        </div>
+        <pre id="ldrSketchCode" class="mono text-[11px] leading-relaxed bg-slate-950 border border-slate-800 rounded-xl p-4 text-emerald-300 overflow-x-auto"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full px-4 sm:px-0"></div>
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/70 bg-slate-950/75 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/25">
+          <i data-lucide="flashlight" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-extrabold tracking-tight text-white leading-tight">LumenLink <span class="text-amber-400">Li-Fi</span></h1>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-300 border border-sky-500/30">TX + RX</span>
+          </div>
+          <p class="text-xs text-slate-400">Optical Flashlight &amp; Pulse Modulation Transmitter</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5">
+        <nav class="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800" aria-label="App Mode">
+          <button id="tabSend" type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-amber-400 text-slate-950 shadow">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span>Send (Light)</span>
+          </button>
+          <button id="tabReceive" type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white">
+            <i data-lucide="scan-eye" class="w-3.5 h-3.5"></i>
+            <span>Receive (Camera)</span>
+          </button>
+        </nav>
+        <button id="openLdrModalBtn" type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-xs font-semibold text-sky-300 transition">
+          <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+          <span>LDR Receiver Code</span>
+        </button>
+        <div id="headerStatusPill" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300">
+          <span id="headerStatusDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="headerStatusText">Ready to Transmit</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-6 space-y-5">
+    <!-- Top Modulation & Speed Control Strip -->
+    <section class="glass-card rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-4 flex-1">
+        <div class="min-w-[210px] flex-1 sm:flex-initial">
+          <label for="protocolSelect" class="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">Modulation Protocol</label>
+          <select id="protocolSelect" class="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-400">
+            <option value="morse">Morse Code (OOK Timing)</option>
+            <option value="binary">Binary 8-bit ASCII (0xAA Sync)</option>
+          </select>
+        </div>
+
+        <div class="min-w-[230px] flex-1">
+          <div class="flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">
+            <label for="unitSpeedRange">LDR Pulse Speed</label>
+            <div class="mono text-xs">
+              <span id="unitSpeedLabel" class="text-amber-400 font-bold">100 ms</span>
+              <span id="baudRateLabel" class="text-slate-500 ml-1">(10.0 bps)</span>
+            </div>
+          </div>
+          <input id="unitSpeedRange" type="range" min="50" max="250" step="10" value="100" class="w-full cursor-pointer" />
+          <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+            <button type="button" data-speed="80" class="speed-preset-btn px-2.5 py-0.5 rounded-md bg-slate-800/90 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 transition">LDR Fast 80ms</button>
+            <button type="button" data-speed="100" class="speed-preset-btn px-2.5 py-0.5 rounded-md bg-amber-400/20 border border-amber-400/40 text-[11px] font-semibold text-amber-300 transition">LDR Optimal 100ms</button>
+            <button type="button" data-speed="150" class="speed-preset-btn px-2.5 py-0.5 rounded-md bg-slate-800/90 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 transition">LDR Safe 150ms</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loop Toggle -->
+      <div class="flex items-center justify-between md:justify-end gap-3 bg-slate-950/70 border border-slate-800/80 rounded-xl px-3.5 py-2.5">
+        <div>
+          <div class="text-xs font-semibold text-slate-200">Repeat Loop</div>
+          <div class="text-[11px] text-slate-400">Continuous hardware test</div>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input id="loopToggle" type="checkbox" class="sr-only peer" />
+          <div class="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400 peer-checked:after:bg-slate-950"></div>
+        </label>
+      </div>
+    </section>
+
+    <!-- Main Two-Column Transmitter Studio -->
+    <section id="sendPanel" class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <!-- Left Column: Message Composer & Hardware -->
+      <div class="lg:col-span-7 glass-card rounded-2xl p-5 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="terminal" class="w-4 h-4 text-amber-400"></i>
+            Message Payload
+          </h2>
+          <div class="flex items-center gap-2">
+            <span id="charCount" class="mono text-xs text-slate-400">5 chars</span>
+            <button id="clearMsgBtn" type="button" class="text-xs text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded bg-slate-800/70 transition">Clear</button>
+          </div>
+        </div>
+
+        <textarea
+          id="messageInput"
+          rows="4"
+          maxlength="160"
+          placeholder="Type the message to transmit via flashlight..."
+          class="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl p-4 text-base text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 resize-none transition"
+        >HELLO</textarea>
+
+        <!-- Quick Presets -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-400">Presets:</span>
+          <button type="button" data-preset="HELLO" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">HELLO</button>
+          <button type="button" data-preset="SOS" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">SOS</button>
+          <button type="button" data-preset="LIFI OK" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">LIFI OK</button>
+          <button type="button" data-preset="DATA 101" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">DATA 101</button>
+        </div>
+
+        <!-- Emitter Hardware Selector -->
+        <div class="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-2.5">
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Optical Emitter Hardware</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-amber-400/50 transition">
+              <input id="emitterTorch" type="radio" name="emitterMode" value="torch" checked class="accent-amber-400" />
+              <div>
+                <div class="text-xs font-semibold text-white">Mobile Flashlight (LED)</div>
+                <div class="text-[11px] text-slate-400">Rear torch + auto screen fallback</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-amber-400/50 transition">
+              <input id="emitterScreen" type="radio" name="emitterMode" value="screen" class="accent-amber-400" />
+              <div>
+                <div class="text-xs font-semibold text-white">Screen Flash</div>
+                <div class="text-[11px] text-slate-400">High-contrast white/black strobe</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Encoded Pattern Box -->
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Encoded Light Sequence</span>
+            <span id="estDuration" class="mono text-xs font-semibold text-amber-400">~3.6s</span>
+          </div>
+          <div id="encodedPreview" class="mono text-xs text-sky-300 break-all max-h-20 overflow-y-auto leading-relaxed"></div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap items-center gap-2.5 pt-1">
+          <button id="startSendBtn" class="flex-1 min-w-[170px] flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 hover:brightness-105 text-slate-950 font-extrabold text-sm transition shadow-lg shadow-amber-500/25">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            <span>Transmit via Light</span>
+          </button>
+          <button id="calibrateBeamBtn" type="button" title="Toggle steady light beam to adjust your LDR module potentiometer" class="px-4 py-3.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 font-semibold text-xs sm:text-sm transition flex items-center gap-1.5">
+            <i data-lucide="sun" class="w-4 h-4"></i>
+            <span>LDR Align Beam</span>
+          </button>
+          <button id="stopSendBtn" disabled class="px-4 py-3.5 rounded-xl bg-slate-800 text-slate-400 font-semibold text-sm transition disabled:opacity-40 enabled:hover:bg-rose-600 enabled:hover:text-white">
+            Stop
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Column: Live Optical Beacon & Signal Telemetry -->
+      <div class="lg:col-span-5 glass-card rounded-2xl p-5 flex flex-col justify-between gap-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="radio" class="w-4 h-4 text-sky-400"></i>
+              Optical Beacon &amp; Telemetry
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Real-time LED pulse state &amp; waveform</p>
+          </div>
+          <span id="txLogicBadge" class="mono text-[11px] px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 font-bold">LOW (0)</span>
+        </div>
+
+        <!-- Optical Beacon Visualizer -->
+        <div class="flex flex-col items-center justify-center py-3">
+          <div class="relative flex items-center justify-center">
+            <div id="txPulseRing" class="hidden absolute w-36 h-36 rounded-full border-2 border-amber-400/60 pulse-ring"></div>
+            <div id="txLamp" class="w-28 h-28 rounded-full bg-slate-950 border-4 border-slate-800 flex items-center justify-center transition-all duration-75">
+              <i data-lucide="lightbulb" id="txLampIcon" class="w-11 h-11 text-slate-600 transition-colors duration-75"></i>
+            </div>
+          </div>
+          <div id="txStateBadge" class="mt-3.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-slate-800/90 text-slate-300">
+            Idle — Ready to Transmit
+          </div>
+        </div>
+
+        <!-- Live Square-Wave Oscilloscope -->
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+            <span class="uppercase tracking-wider font-semibold">Live Modulation Wave</span>
+            <span class="mono text-sky-400">OOK Square</span>
+          </div>
+          <canvas id="txWaveCanvas" width="420" height="72" class="w-full h-16 rounded-lg bg-slate-900/60"></canvas>
+        </div>
+
+        <!-- Progress & Hardware Info -->
+        <div class="space-y-2.5 bg-slate-950/75 border border-slate-800 rounded-xl p-3.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400">Active Symbol:</span>
+            <span id="txCurrentChar" class="mono font-bold text-amber-300 text-sm">--</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="txProgressBar" class="h-full bg-gradient-to-r from-amber-400 to-sky-400 w-0 transition-all duration-100"></div>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mono">
+            <span id="txStepCount">0 / 0 pulses</span>
+            <span id="txHardwareNote">Torch: Auto-detect</span>
+          </div>
+        </div>
+
+        <!-- Recent Transmissions Log -->
+        <div class="bg-slate-950/75 border border-slate-800 rounded-xl p-3.5">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Recent Transmissions</span>
+            <span id="txHistoryCount" class="mono text-[11px] text-slate-500">0 sent</span>
+          </div>
+          <div id="txHistoryList" class="space-y-1.5 max-h-24 overflow-y-auto text-xs text-slate-500">
+            <div class="italic">No transmissions yet.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== RECEIVE PANEL ==================== -->
+    <section id="receivePanel" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <!-- Left: Camera Sensor & Waveform -->
+      <div class="lg:col-span-6 glass-card rounded-2xl p-5 flex flex-col gap-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="camera" class="w-4 h-4 text-sky-400"></i>
+            Optical Camera Sensor
+          </h2>
+          <div class="flex items-center gap-2">
+            <button id="startCamBtn" type="button" class="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition flex items-center gap-1.5">
+              <i data-lucide="video" class="w-3.5 h-3.5"></i>
+              <span>Start Camera</span>
+            </button>
+            <button id="stopCamBtn" type="button" disabled class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 text-xs font-semibold transition disabled:opacity-40 enabled:hover:bg-rose-600 enabled:hover:text-white">
+              Stop
+            </button>
+          </div>
+        </div>
+
+        <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+          <video id="rxVideo" playsinline muted autoplay class="w-full h-full object-cover hidden"></video>
+          <div id="rxCamPlaceholder" class="text-center p-4">
+            <i data-lucide="aperture" class="w-10 h-10 text-slate-600 mx-auto mb-2"></i>
+            <p class="text-xs text-slate-400">Point your rear camera at the sender's flashlight or screen.</p>
+            <p class="text-[11px] text-slate-500 mt-1">Or click "Simulate Light" below to test decoding.</p>
+          </div>
+          <div id="rxReticle" class="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div class="w-16 h-16 rounded-full border-2 border-dashed border-sky-400/80 flex items-center justify-center">
+              <div id="rxReticleDot" class="w-3 h-3 rounded-full bg-slate-500 transition-colors duration-75"></div>
+            </div>
+          </div>
+          <div class="absolute top-2.5 left-2.5 bg-slate-950/80 backdrop-blur border border-slate-700/70 rounded-lg px-2.5 py-1 text-[11px] mono flex items-center gap-2">
+            <span class="text-slate-400">LUX:</span>
+            <span id="rxLuxValue" class="text-sky-300 font-bold">0</span>
+            <span id="rxLogicState" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold">OFF</span>
+          </div>
+        </div>
+
+        <canvas id="rxSampleCanvas" width="64" height="64" class="hidden"></canvas>
+
+        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+            <span class="uppercase tracking-wider font-semibold">Brightness Waveform</span>
+            <span class="mono">Threshold: <strong id="thresholdValLabel" class="text-amber-400">150</strong></span>
+          </div>
+          <canvas id="rxWaveformCanvas" width="480" height="100" class="w-full h-24 rounded-lg bg-slate-900/60"></canvas>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+          <div class="flex-1 min-w-[160px]">
+            <label for="thresholdSlider" class="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Detection Threshold (0–255)</label>
+            <input id="thresholdSlider" type="range" min="15" max="245" value="150" class="w-full cursor-pointer" />
+          </div>
+          <button id="autoCalibrateBtn" type="button" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-1.5">
+            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Auto-Calibrate</span>
+          </button>
+          <button id="simulateRxBtn" type="button" class="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-xs font-semibold text-emerald-300 transition flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Simulate Light</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Decoded Message Display -->
+      <div class="lg:col-span-6 glass-card rounded-2xl p-5 flex flex-col justify-between gap-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="monitor" class="w-4 h-4 text-emerald-400"></i>
+            Decoded Message Screen
+          </h2>
+          <div class="flex items-center gap-2">
+            <button id="copyDecodedBtn" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition flex items-center gap-1">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy</span>
+            </button>
+            <button id="clearDecodedBtn" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition flex items-center gap-1">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 min-h-[200px] bg-slate-950/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div id="decodedTextDisplay" class="mono text-xl sm:text-2xl font-bold text-emerald-400 break-words leading-relaxed tracking-wide">
+            <span class="text-slate-600 text-sm font-normal">Waiting for incoming light pulses...</span>
+          </div>
+          <div class="border-t border-slate-800/80 pt-2.5 mt-3 flex items-center justify-between text-xs text-slate-400">
+            <span>Raw Pulses:</span>
+            <span id="rxBufferDisplay" class="mono text-sky-300 truncate max-w-[260px]">--</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/75 border border-slate-800 rounded-xl p-3.5 space-y-2 text-xs text-slate-400">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-slate-300">Receiver Decoder State:</span>
+            <span id="rxDecoderStatus" class="mono text-sky-400">Standby</span>
+          </div>
+          <p class="leading-relaxed">
+            <strong>Tip:</strong> Match the <strong>Modulation Protocol</strong> and <strong>LDR Pulse Speed</strong> on both devices, center the flashlight inside the reticle, and tap <strong>Auto-Calibrate</strong> before transmitting.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ==================== MORSE & BINARY TABLES ====================
+    const MORSE_MAP = {
+      'A': '.-',   'B': '-...', 'C': '-.-.', 'D': '-..',  'E': '.',
+      'F': '..-.', 'G': '--.',  'H': '....', 'I': '..',   'J': '.---',
+      'K': '-.-',  'L': '.-..', 'M': '--',   'N': '-.',   'O': '---',
+      'P': '.--.', 'Q': '--.-', 'R': '.-.',  'S': '...',  'T': '-',
+      'U': '..-',  'V': '...-', 'W': '.--',  'X': '-..-', 'Y': '-.--',
+      'Z': '--..',
+      '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-',
+      '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.',
+      '.': '.-.-.-', ',': '--..--', '?': '..--..', '!': '-.-.--', '/': '-..-.',
+      '-': '-....-', '@': '.--.-.'
+    };
+    const REVERSE_MORSE = Object.fromEntries(
+      Object.entries(MORSE_MAP).map(([k, v]) => [v, k])
+    );
+
+    // ==================== STATE ====================
+    const state = {
+      mode: 'send',
+      protocol: 'morse',
+      unitMs: 100,
+      alignBeamOn: false,
+      txRunning: false,
+      txTimer: null,
+      txWaveRaf: null,
+      txStream: null,
+      txTrack: null,
+      txUseTorch: false,
+      currentLightOn: false,
+      waveSamples: new Array(90).fill(0),
+      history: [],
+      rxRunning: false,
+      rxSimulating: false,
+      rxStream: null,
+      rxRaf: null,
+      rxSimTimer: null,
+      threshold: 150,
+      waveform: new Array(120).fill(0),
+      decodedText: '',
+      rxLightOn: false,
+      rxLastEdgeTime: 0,
+      rxCurrentSymbols: '',
+      rxCharFlushed: true,
+      rxWordFlushed: true,
+      rxBitHistory: [],
+      rxLastSampleTime: 0,
+      rxBinarySynced: false,
+      rxBinaryBits: ''
+    };
+
+    // ==================== DOM REFS ====================
+    const els = {
+      tabSend: document.getElementById('tabSend'),
+      tabReceive: document.getElementById('tabReceive'),
+      sendPanel: document.getElementById('sendPanel'),
+      receivePanel: document.getElementById('receivePanel'),
+      startCamBtn: document.getElementById('startCamBtn'),
+      stopCamBtn: document.getElementById('stopCamBtn'),
+      rxVideo: document.getElementById('rxVideo'),
+      rxCamPlaceholder: document.getElementById('rxCamPlaceholder'),
+      rxReticleDot: document.getElementById('rxReticleDot'),
+      rxLuxValue: document.getElementById('rxLuxValue'),
+      rxLogicState: document.getElementById('rxLogicState'),
+      rxSampleCanvas: document.getElementById('rxSampleCanvas'),
+      rxWaveformCanvas: document.getElementById('rxWaveformCanvas'),
+      thresholdSlider: document.getElementById('thresholdSlider'),
+      thresholdValLabel: document.getElementById('thresholdValLabel'),
+      autoCalibrateBtn: document.getElementById('autoCalibrateBtn'),
+      simulateRxBtn: document.getElementById('simulateRxBtn'),
+      decodedTextDisplay: document.getElementById('decodedTextDisplay'),
+      rxBufferDisplay: document.getElementById('rxBufferDisplay'),
+      rxDecoderStatus: document.getElementById('rxDecoderStatus'),
+      copyDecodedBtn: document.getElementById('copyDecodedBtn'),
+      clearDecodedBtn: document.getElementById('clearDecodedBtn'),
+      protocolSelect: document.getElementById('protocolSelect'),
+      unitSpeedRange: document.getElementById('unitSpeedRange'),
+      unitSpeedLabel: document.getElementById('unitSpeedLabel'),
+      baudRateLabel: document.getElementById('baudRateLabel'),
+      loopToggle: document.getElementById('loopToggle'),
+      messageInput: document.getElementById('messageInput'),
+      charCount: document.getElementById('charCount'),
+      clearMsgBtn: document.getElementById('clearMsgBtn'),
+      emitterTorch: document.getElementById('emitterTorch'),
+      emitterScreen: document.getElementById('emitterScreen'),
+      encodedPreview: document.getElementById('encodedPreview'),
+      estDuration: document.getElementById('estDuration'),
+      startSendBtn: document.getElementById('startSendBtn'),
+      stopSendBtn: document.getElementById('stopSendBtn'),
+      txPulseRing: document.getElementById('txPulseRing'),
+      txLamp: document.getElementById('txLamp'),
+      txLampIcon: document.getElementById('txLampIcon'),
+      txStateBadge: document.getElementById('txStateBadge'),
+      txLogicBadge: document.getElementById('txLogicBadge'),
+      txWaveCanvas: document.getElementById('txWaveCanvas'),
+      txCurrentChar: document.getElementById('txCurrentChar'),
+      txProgressBar: document.getElementById('txProgressBar'),
+      txStepCount: document.getElementById('txStepCount'),
+      txHardwareNote: document.getElementById('txHardwareNote'),
+      txHistoryList: document.getElementById('txHistoryList'),
+      txHistoryCount: document.getElementById('txHistoryCount'),
+      headerStatusDot: document.getElementById('headerStatusDot'),
+      headerStatusText: document.getElementById('headerStatusText'),
+      screenFlashOverlay: document.getElementById('screenFlashOverlay'),
+      stopOverlayBtn: document.getElementById('stopOverlayBtn'),
+      overlaySymbolText: document.getElementById('overlaySymbolText'),
+      overlayProgressText: document.getElementById('overlayProgressText'),
+      calibrateBeamBtn: document.getElementById('calibrateBeamBtn'),
+      openLdrModalBtn: document.getElementById('openLdrModalBtn'),
+      closeLdrModalBtn: document.getElementById('closeLdrModalBtn'),
+      ldrModal: document.getElementById('ldrModal'),
+      ldrSketchCode: document.getElementById('ldrSketchCode'),
+      copySketchBtn: document.getElementById('copySketchBtn'),
+      modalSpeedText: document.getElementById('modalSpeedText'),
+      toastContainer: document.getElementById('toastContainer')
+    };
+
+    // ==================== UTILITIES ====================
+    function showToast(msg, type = 'info') {
+      const colors = {
+        info: 'bg-slate-900 border-sky-500/50 text-sky-200',
+        success: 'bg-slate-900 border-emerald-500/50 text-emerald-200',
+        warn: 'bg-slate-900 border-amber-500/50 text-amber-200',
+        error: 'bg-slate-900 border-rose-500/50 text-rose-200'
+      };
+      const div = document.createElement('div');
+      div.className = `pointer-events-auto border rounded-xl px-3.5 py-2.5 text-xs font-medium shadow-xl backdrop-blur transition-opacity duration-300 ${colors[type] || colors.info}`;
+      div.textContent = msg;
+      els.toastContainer.appendChild(div);
+      setTimeout(() => {
+        div.style.opacity = '0';
+        setTimeout(() => div.remove(), 300);
+      }, 3000);
+    }
+
+    // ==================== ENCODING ENGINE ====================
+    function encodeMorseTimeline(text) {
+      const clean = text.toUpperCase().trim();
+      const steps = [];
+      const tokens = [];
+      for (let i = 0; i < clean.length; i++) {
+        const ch = clean[i];
+        if (ch === ' ') {
+          if (steps.length > 0) {
+            steps.push({ on: false, units: 4, label: 'SPACE' });
+            tokens.push('/');
+          }
+          continue;
+        }
+        const code = MORSE_MAP[ch];
+        if (!code) continue;
+        tokens.push(code);
+        for (let j = 0; j < code.length; j++) {
+          const sym = code[j];
+          steps.push({ on: true, units: sym === '-' ? 3 : 1, label: `${ch} (${sym})` });
+          if (j < code.length - 1) {
+            steps.push({ on: false, units: 1, label: `${ch} gap` });
+          }
+        }
+        if (i < clean.length - 1 && clean[i + 1] !== ' ') {
+          steps.push({ on: false, units: 3, label: 'Next char' });
+        } else {
+          steps.push({ on: false, units: 2.5, label: 'Flush' });
+        }
+      }
+      return { steps, preview: tokens.join(' ') || '(no encodable characters)' };
+    }
+
+    function encodeBinaryTimeline(text) {
+      const bytes = [0xAA, 0x02];
+      for (let i = 0; i < text.length; i++) {
+        bytes.push(text.charCodeAt(i) & 0xFF);
+      }
+      bytes.push(0x03);
+
+      const steps = [];
+      const bitStrings = [];
+      bytes.forEach((b, idx) => {
+        const bin = b.toString(2).padStart(8, '0');
+        bitStrings.push(bin);
+        const charLabel = idx === 0 ? 'SYNC' : idx === 1 ? 'START' : idx === bytes.length - 1 ? 'END' : text[idx - 2];
+        for (let k = 0; k < 8; k++) {
+          steps.push({ on: bin[k] === '1', units: 1, label: `${charLabel} [${bin[k]}]` });
+        }
+      });
+      steps.push({ on: false, units: 2, label: 'DONE' });
+      return { steps, preview: bitStrings.join(' ') };
+    }
+
+    function updatePreview() {
+      const msg = els.messageInput.value;
+      els.charCount.textContent = `${msg.length} chars`;
+      const encoded = state.protocol === 'morse' ? encodeMorseTimeline(msg) : encodeBinaryTimeline(msg);
+      els.encodedPreview.textContent = encoded.preview;
+      const totalUnits = encoded.steps.reduce((acc, s) => acc + s.units, 0);
+      const sec = (totalUnits * state.unitMs) / 1000;
+      els.estDuration.textContent = `~${sec.toFixed(1)}s`;
+      els.baudRateLabel.textContent = `(${(1000 / state.unitMs).toFixed(1)} bps)`;
+    }
+
+    // ==================== WAVEFORM VISUALIZER ====================
+    function drawTxWave() {
+      const canvas = els.txWaveCanvas;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // Subtle grid baseline
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, h - 12);
+      ctx.lineTo(w, h - 12);
+      ctx.moveTo(0, 12);
+      ctx.lineTo(w, 12);
+      ctx.stroke();
+
+      // Digital square wave
+      ctx.strokeStyle = state.txRunning ? '#fbbf24' : '#38bdf8';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      const stepX = w / (state.waveSamples.length - 1);
+      for (let i = 0; i < state.waveSamples.length; i++) {
+        const x = i * stepX;
+        const y = state.waveSamples[i] ? 12 : h - 12;
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          const prevY = state.waveSamples[i - 1] ? 12 : h - 12;
+          if (prevY !== y) ctx.lineTo(x, prevY);
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+    }
+
+    function startWaveLoop() {
+      if (state.txWaveRaf) cancelAnimationFrame(state.txWaveRaf);
+      const tick = () => {
+        if (!state.txRunning) return;
+        state.waveSamples.push(state.currentLightOn ? 1 : 0);
+        if (state.waveSamples.length > 90) state.waveSamples.shift();
+        drawTxWave();
+        state.txWaveRaf = requestAnimationFrame(tick);
+      };
+      state.txWaveRaf = requestAnimationFrame(tick);
+    }
+
+    // ==================== HARDWARE & TRANSMISSION ====================
+    async function initTorchIfSelected() {
+      if (!els.emitterTorch.checked) {
+        state.txUseTorch = false;
+        els.txHardwareNote.textContent = 'Emitter: Screen Flash';
+        return;
+      }
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Camera API unavailable');
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        const track = stream.getVideoTracks()[0];
+        const caps = track.getCapabilities ? track.getCapabilities() : {};
+        if (!caps.torch) {
+          stream.getTracks().forEach(t => t.stop());
+          throw new Error('Torch not supported on this device');
+        }
+        state.txStream = stream;
+        state.txTrack = track;
+        state.txUseTorch = true;
+        els.txHardwareNote.textContent = 'Torch: Rear LED Active';
+      } catch (err) {
+        state.txUseTorch = false;
+        els.txHardwareNote.textContent = 'Torch unavailable — Screen Flash';
+        showToast('Flashlight hardware unavailable here; using Screen Flash.', 'warn');
+      }
+    }
+
+    async function setLightOutput(on) {
+      state.currentLightOn = on;
+      if (on) {
+        els.txLamp.classList.add('bg-amber-400', 'border-amber-200', 'torch-glow');
+        els.txLamp.classList.remove('bg-slate-950', 'border-slate-800');
+        els.txLampIcon.classList.add('text-slate-950');
+        els.txLampIcon.classList.remove('text-slate-600');
+        els.txLogicBadge.textContent = 'HIGH (1)';
+        els.txLogicBadge.className = 'mono text-[11px] px-2.5 py-1 rounded-lg bg-amber-400/20 border border-amber-400/50 text-amber-300 font-bold';
+      } else {
+        els.txLamp.classList.remove('bg-amber-400', 'border-amber-200', 'torch-glow');
+        els.txLamp.classList.add('bg-slate-950', 'border-slate-800');
+        els.txLampIcon.classList.remove('text-slate-950');
+        els.txLampIcon.classList.add('text-slate-600');
+        els.txLogicBadge.textContent = 'LOW (0)';
+        els.txLogicBadge.className = 'mono text-[11px] px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 font-bold';
+      }
+
+      if (state.txUseTorch && state.txTrack) {
+        try {
+          await state.txTrack.applyConstraints({ advanced: [{ torch: on }] });
+        } catch (e) {
+          // Ignore transient constraint errors
+        }
+      } else {
+        els.screenFlashOverlay.style.backgroundColor = on ? '#ffffff' : '#000000';
+      }
+    }
+
+    function addHistoryEntry(msg, durationSec) {
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      state.history.unshift({
+        msg,
+        protocol: state.protocol.toUpperCase(),
+        duration: durationSec.toFixed(1),
+        time: timeStr
+      });
+      if (state.history.length > 6) state.history.pop();
+      renderHistory();
+    }
+
+    function renderHistory() {
+      els.txHistoryCount.textContent = `${state.history.length} sent`;
+      if (state.history.length === 0) {
+        els.txHistoryList.innerHTML = '<div class="italic">No transmissions yet.</div>';
+        return;
+      }
+      els.txHistoryList.innerHTML = '';
+      state.history.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800/80 rounded-lg px-2.5 py-1.5';
+        const left = document.createElement('div');
+        left.className = 'truncate text-slate-200 font-medium';
+        left.textContent = item.msg;
+        const right = document.createElement('div');
+        right.className = 'mono text-[10px] text-slate-400 shrink-0';
+        right.textContent = `${item.protocol} · ${item.duration}s`;
+        row.appendChild(left);
+        row.appendChild(right);
+        row.title = `Click to load "${item.msg}"`;
+        row.classList.add('cursor-pointer', 'hover:border-amber-400/40');
+        row.addEventListener('click', () => {
+          els.messageInput.value = item.msg;
+          updatePreview();
+        });
+        els.txHistoryList.appendChild(row);
+      });
+    }
+
+    async function startTransmission() {
+      const msg = els.messageInput.value.trim();
+      if (!msg) {
+        showToast('Please type a message to transmit.', 'warn');
+        return;
+      }
+      if (state.txRunning) return;
+
+      const encoded = state.protocol === 'morse' ? encodeMorseTimeline(msg) : encodeBinaryTimeline(msg);
+      if (encoded.steps.length === 0) {
+        showToast('Message contains no supported characters.', 'warn');
+        return;
+      }
+
+      await initTorchIfSelected();
+
+      state.txRunning = true;
+      els.startSendBtn.disabled = true;
+      els.stopSendBtn.disabled = false;
+      els.txPulseRing.classList.remove('hidden');
+      els.txStateBadge.textContent = 'Transmitting Optical Signal...';
+      els.txStateBadge.className = 'mt-3.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+      els.headerStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+      els.headerStatusText.textContent = 'Transmitting';
+
+      if (!state.txUseTorch) {
+        els.screenFlashOverlay.classList.remove('hidden');
+        els.screenFlashOverlay.classList.add('flex');
+      }
+
+      startWaveLoop();
+
+      let idx = 0;
+      const total = encoded.steps.length;
+      const totalUnits = encoded.steps.reduce((acc, s) => acc + s.units, 0);
+      const durationSec = (totalUnits * state.unitMs) / 1000;
+
+      const runStep = async () => {
+        if (!state.txRunning) return;
+        if (idx >= total) {
+          addHistoryEntry(msg, durationSec);
+          if (els.loopToggle.checked) {
+            idx = 0;
+            state.txTimer = setTimeout(runStep, 300);
+            return;
+          }
+          stopTransmission(true);
+          return;
+        }
+
+        const step = encoded.steps[idx];
+        await setLightOutput(step.on);
+
+        const pct = Math.round(((idx + 1) / total) * 100);
+        els.txCurrentChar.textContent = step.label;
+        els.txProgressBar.style.width = `${pct}%`;
+        els.txStepCount.textContent = `${idx + 1} / ${total} pulses`;
+        els.overlaySymbolText.textContent = step.label;
+        els.overlayProgressText.textContent = `${pct}%`;
+
+        idx++;
+        state.txTimer = setTimeout(runStep, step.units * state.unitMs);
+      };
+
+      runStep();
+    }
+
+    async function stopTransmission(completed = false) {
+      state.txRunning = false;
+      if (state.txTimer) {
+        clearTimeout(state.txTimer);
+        state.txTimer = null;
+      }
+      if (state.txWaveRaf) {
+        cancelAnimationFrame(state.txWaveRaf);
+        state.txWaveRaf = null;
+      }
+      await setLightOutput(false);
+      state.waveSamples.fill(0);
+      drawTxWave();
+
+      if (state.txStream) {
+        state.txStream.getTracks().forEach(t => t.stop());
+        state.txStream = null;
+        state.txTrack = null;
+      }
+
+      els.screenFlashOverlay.classList.add('hidden');
+      els.screenFlashOverlay.classList.remove('flex');
+      els.txPulseRing.classList.add('hidden');
+      els.startSendBtn.disabled = false;
+      els.stopSendBtn.disabled = true;
+      els.headerStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+      els.headerStatusText.textContent = 'Ready to Transmit';
+
+      if (completed) {
+        els.txStateBadge.textContent = 'Transmission Complete';
+        els.txStateBadge.className = 'mt-3.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        showToast('Message transmitted via light!', 'success');
+      } else {
+        els.txStateBadge.textContent = 'Idle — Ready to Transmit';
+        els.txStateBadge.className = 'mt-3.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-slate-800/90 text-slate-300';
+      }
+    }
+
+    // ==================== EVENT BINDINGS ====================
+    function setUnitSpeed(ms) {
+      state.unitMs = Number(ms);
+      els.unitSpeedRange.value = state.unitMs;
+      els.unitSpeedLabel.textContent = `${state.unitMs} ms`;
+      document.querySelectorAll('.speed-preset-btn').forEach(b => {
+        const active = Number(b.dataset.speed) === state.unitMs;
+        b.className = active
+          ? 'speed-preset-btn px-2.5 py-0.5 rounded-md bg-amber-400/20 border border-amber-400/40 text-[11px] font-semibold text-amber-300 transition'
+          : 'speed-preset-btn px-2.5 py-0.5 rounded-md bg-slate-800/90 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 transition';
+      });
+      updatePreview();
+    }
+
+    els.protocolSelect.addEventListener('change', (e) => {
+      state.protocol = e.target.value;
+      updatePreview();
+    });
+
+    els.unitSpeedRange.addEventListener('input', (e) => setUnitSpeed(e.target.value));
+    document.querySelectorAll('.speed-preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => setUnitSpeed(btn.dataset.speed));
+    });
+
+    els.messageInput.addEventListener('input', updatePreview);
+    els.clearMsgBtn.addEventListener('click', () => {
+      els.messageInput.value = '';
+      updatePreview();
+      els.messageInput.focus();
+    });
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        els.messageInput.value = btn.dataset.preset;
+        updatePreview();
+      });
+    });
+
+    els.startSendBtn.addEventListener('click', startTransmission);
+    els.stopSendBtn.addEventListener('click', () => stopTransmission(false));
+    els.stopOverlayBtn.addEventListener('click', () => stopTransmission(false));
+
+    // ==================== LDR ALIGN BEAM & ARDUINO SKETCH ====================
+    function buildLdrSketch() {
+      const u = state.unitMs;
+      els.modalSpeedText.textContent = `${u} ms`;
+      return `// LumenLink TX -> LDR Sensor Module Receiver (Arduino / ESP32)
+// Set LumenLink TX to: Morse Code, ${u} ms unit speed
+#define LDR_DO_PIN 2
+#define LIGHT_ON LOW  // Most LM393 LDR modules output LOW when bright light hits
+
+const unsigned long UNIT_MS = ${u};
+String morseBuf = "";
+bool prevLight = false;
+unsigned long lastEdge = 0;
+bool charFlushed = true;
+bool wordFlushed = true;
+
+char decodeMorse(String code) {
+  if (code == ".-") return 'A';   if (code == "-...") return 'B';
+  if (code == "-.-.") return 'C'; if (code == "-..") return 'D';
+  if (code == ".") return 'E';    if (code == "..-.") return 'F';
+  if (code == "--.") return 'G';  if (code == "....") return 'H';
+  if (code == "..") return 'I';   if (code == ".---") return 'J';
+  if (code == "-.-") return 'K';  if (code == ".-..") return 'L';
+  if (code == "--") return 'M';   if (code == "-.") return 'N';
+  if (code == "---") return 'O';  if (code == ".--.") return 'P';
+  if (code == "--.-") return 'Q'; if (code == ".-.") return 'R';
+  if (code == "...") return 'S';  if (code == "-") return 'T';
+  if (code == "..-") return 'U';  if (code == "...-") return 'V';
+  if (code == ".--") return 'W';  if (code == "-..-") return 'X';
+  if (code == "-.--") return 'Y'; if (code == "--..") return 'Z';
+  if (code == "-----") return '0'; if (code == ".----") return '1';
+  if (code == "..---") return '2'; if (code == "...--") return '3';
+  if (code == "....-") return '4'; if (code == ".....") return '5';
+  if (code == "-....") return '6'; if (code == "--...") return '7';
+  if (code == "---..") return '8'; if (code == "----.") return '9';
+  return '?';
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LDR_DO_PIN, INPUT);
+  lastEdge = millis();
+  Serial.println("LumenLink LDR Receiver Ready...");
+}
+
+void loop() {
+  bool light = (digitalRead(LDR_DO_PIN) == LIGHT_ON);
+  unsigned long now = millis();
+
+  if (light != prevLight) {
+    unsigned long dur = now - lastEdge;
+    if (prevLight && dur >= (unsigned long)(UNIT_MS * 0.4)) {
+      morseBuf += (dur >= (unsigned long)(UNIT_MS * 2.0)) ? '-' : '.';
+      charFlushed = false;
+      wordFlushed = false;
+    }
+    prevLight = light;
+    lastEdge = now;
+  } else if (!light) {
+    unsigned long offDur = now - lastEdge;
+    if (!charFlushed && offDur >= (unsigned long)(UNIT_MS * 2.1) && morseBuf.length() > 0) {
+      Serial.print(decodeMorse(morseBuf));
+      morseBuf = "";
+      charFlushed = true;
+    }
+    if (!wordFlushed && charFlushed && offDur >= (unsigned long)(UNIT_MS * 5.2)) {
+      Serial.print(" ");
+      wordFlushed = true;
+    }
+  }
+  delay(2);
+}`;
+    }
+
+    async function toggleAlignBeam() {
+      if (state.txRunning) return;
+      if (!state.alignBeamOn) {
+        await initTorchIfSelected();
+        state.alignBeamOn = true;
+        await setLightOutput(true);
+        els.calibrateBeamBtn.className = 'px-4 py-3.5 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center gap-1.5';
+        els.txStateBadge.textContent = 'Align Beam ON — Adjust LDR Potentiometer';
+        els.startSendBtn.disabled = true;
+        els.stopSendBtn.disabled = false;
+        showToast('Steady beam ON. Adjust your LDR sensor sensitivity!', 'info');
+      } else {
+        await stopAlignBeam();
+      }
+    }
+
+    async function stopAlignBeam() {
+      if (!state.alignBeamOn) return;
+      state.alignBeamOn = false;
+      await setLightOutput(false);
+      if (state.txStream) {
+        state.txStream.getTracks().forEach(t => t.stop());
+        state.txStream = null;
+        state.txTrack = null;
+      }
+      els.calibrateBeamBtn.className = 'px-4 py-3.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 font-semibold text-xs sm:text-sm transition flex items-center gap-1.5';
+      els.txStateBadge.textContent = 'Idle — Ready to Transmit';
+      els.startSendBtn.disabled = false;
+      els.stopSendBtn.disabled = true;
+    }
+
+    els.calibrateBeamBtn.addEventListener('click', toggleAlignBeam);
+    els.stopSendBtn.addEventListener('click', () => {
+      if (state.alignBeamOn) stopAlignBeam();
+    });
+
+    els.openLdrModalBtn.addEventListener('click', () => {
+      els.ldrSketchCode.textContent = buildLdrSketch();
+      els.ldrModal.classList.remove('hidden');
+      els.ldrModal.classList.add('flex');
+    });
+    els.closeLdrModalBtn.addEventListener('click', () => {
+      els.ldrModal.classList.add('hidden');
+      els.ldrModal.classList.remove('flex');
+    });
+    els.ldrModal.addEventListener('click', (e) => {
+      if (e.target === els.ldrModal) {
+        els.ldrModal.classList.add('hidden');
+        els.ldrModal.classList.remove('flex');
+      }
+    });
+    els.copySketchBtn.addEventListener('click', async () => {
+      const code = els.ldrSketchCode.textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        showToast('Arduino LDR sketch copied!', 'success');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast('Arduino LDR sketch copied!', 'success');
+      }
+    });
+
+    // ==================== RECEIVER & DECODER ENGINE ====================
+    function renderDecodedText() {
+      if (!state.decodedText) {
+        els.decodedTextDisplay.innerHTML = '<span class="text-slate-600 text-sm font-normal">Waiting for incoming light pulses...</span>';
+      } else {
+        els.decodedTextDisplay.textContent = state.decodedText;
+      }
+    }
+
+    function appendDecodedChar(ch) {
+      state.decodedText += ch;
+      renderDecodedText();
+    }
+
+    function processOpticalSample(lux, now) {
+      state.waveform.push(lux);
+      if (state.waveform.length > 120) state.waveform.shift();
+      drawRxWaveform();
+
+      els.rxLuxValue.textContent = Math.round(lux);
+      const isOn = lux >= state.threshold;
+
+      if (isOn) {
+        els.rxLogicState.textContent = 'ON';
+        els.rxLogicState.className = 'px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-bold';
+        els.rxReticleDot.className = 'w-3 h-3 rounded-full bg-amber-400 shadow';
+      } else {
+        els.rxLogicState.textContent = 'OFF';
+        els.rxLogicState.className = 'px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold';
+        els.rxReticleDot.className = 'w-3 h-3 rounded-full bg-slate-500';
+      }
+
+      if (state.protocol === 'morse') {
+        decodeMorseSample(isOn, now);
+      } else {
+        decodeBinarySample(isOn, now);
+      }
+    }
+
+    function decodeMorseSample(isOn, now) {
+      const u = state.unitMs;
+      if (state.rxLastEdgeTime === 0) {
+        state.rxLastEdgeTime = now;
+        state.rxLightOn = isOn;
+        return;
+      }
+
+      if (isOn !== state.rxLightOn) {
+        const dur = now - state.rxLastEdgeTime;
+        if (state.rxLightOn && dur >= u * 0.4) {
+          const sym = dur >= u * 2.0 ? '-' : '.';
+          state.rxCurrentSymbols += sym;
+          state.rxCharFlushed = false;
+          state.rxWordFlushed = false;
+          els.rxBufferDisplay.textContent = state.rxCurrentSymbols;
+          els.rxDecoderStatus.textContent = 'Receiving Morse...';
+        }
+        state.rxLightOn = isOn;
+        state.rxLastEdgeTime = now;
+      } else if (!isOn) {
+        const offDur = now - state.rxLastEdgeTime;
+        if (!state.rxCharFlushed && offDur >= u * 2.1 && state.rxCurrentSymbols.length > 0) {
+          const decoded = REVERSE_MORSE[state.rxCurrentSymbols] || '?';
+          appendDecodedChar(decoded);
+          state.rxCurrentSymbols = '';
+          state.rxCharFlushed = true;
+          els.rxBufferDisplay.textContent = `Decoded: ${decoded}`;
+        }
+        if (!state.rxWordFlushed && state.rxCharFlushed && offDur >= u * 5.2 && state.decodedText.length > 0) {
+          if (!state.decodedText.endsWith(' ')) appendDecodedChar(' ');
+          state.rxWordFlushed = true;
+          els.rxDecoderStatus.textContent = 'Listening';
+        }
+      }
+    }
+
+    function decodeBinarySample(isOn, now) {
+      if (now - state.rxLastSampleTime < state.unitMs) return;
+      state.rxLastSampleTime = now;
+      const bit = isOn ? '1' : '0';
+      state.rxBitHistory.push(bit);
+      if (state.rxBitHistory.length > 16) state.rxBitHistory.shift();
+
+      if (!state.rxBinarySynced) {
+        if (state.rxBitHistory.join('').endsWith('10101010')) {
+          state.rxBinarySynced = true;
+          state.rxBinaryBits = '';
+          els.rxDecoderStatus.textContent = 'Sync Locked (0xAA)';
+          els.rxBufferDisplay.textContent = 'SYNC OK';
+        }
+        return;
+      }
+
+      state.rxBinaryBits += bit;
+      els.rxBufferDisplay.textContent = state.rxBinaryBits;
+      if (state.rxBinaryBits.length === 8) {
+        const code = parseInt(state.rxBinaryBits, 2);
+        state.rxBinaryBits = '';
+        if (code === 0x02) {
+          els.rxDecoderStatus.textContent = 'Receiving Bytes...';
+        } else if (code === 0x03) {
+          state.rxBinarySynced = false;
+          state.rxBitHistory = [];
+          els.rxDecoderStatus.textContent = 'End of Message';
+        } else if (code >= 32 && code <= 126) {
+          appendDecodedChar(String.fromCharCode(code));
+        }
+      }
+    }
+
+    function drawRxWaveform() {
+      const canvas = els.rxWaveformCanvas;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const thY = h - (state.threshold / 255) * h;
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, thY);
+      ctx.lineTo(w, thY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const stepX = w / (state.waveform.length - 1);
+      for (let i = 0; i < state.waveform.length; i++) {
+        const x = i * stepX;
+        const y = h - (state.waveform[i] / 255) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    async function startCameraReceiver() {
+      if (state.rxRunning) return;
+      stopSimulation();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        state.rxStream = stream;
+        els.rxVideo.srcObject = stream;
+        els.rxVideo.classList.remove('hidden');
+        els.rxCamPlaceholder.classList.add('hidden');
+        state.rxRunning = true;
+        state.rxLastEdgeTime = performance.now();
+        els.startCamBtn.disabled = true;
+        els.stopCamBtn.disabled = false;
+        els.rxDecoderStatus.textContent = 'Camera Active — Listening';
+        els.headerStatusDot.className = 'w-2 h-2 rounded-full bg-sky-400 animate-ping';
+        els.headerStatusText.textContent = 'Receiving';
+
+        const sampleCtx = els.rxSampleCanvas.getContext('2d', { willReadFrequently: true });
+        const loop = (now) => {
+          if (!state.rxRunning) return;
+          if (els.rxVideo.readyState >= 2) {
+            const vw = els.rxVideo.videoWidth || 320;
+            const vh = els.rxVideo.videoHeight || 240;
+            const roiW = Math.max(16, Math.floor(vw * 0.2));
+            const roiH = Math.max(16, Math.floor(vh * 0.2));
+            const sx = Math.floor((vw - roiW) / 2);
+            const sy = Math.floor((vh - roiH) / 2);
+            sampleCtx.drawImage(els.rxVideo, sx, sy, roiW, roiH, 0, 0, 64, 64);
+            const data = sampleCtx.getImageData(0, 0, 64, 64).data;
+            let sum = 0;
+            const pixels = data.length / 4;
+            for (let i = 0; i < data.length; i += 4) {
+              sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            }
+            processOpticalSample(sum / pixels, now);
+          }
+          state.rxRaf = requestAnimationFrame(loop);
+        };
+        state.rxRaf = requestAnimationFrame(loop);
+      } catch (err) {
+        showToast('Camera permission denied or unavailable. Try "Simulate Light".', 'error');
+      }
+    }
+
+    function stopCameraReceiver() {
+      state.rxRunning = false;
+      if (state.rxRaf) {
+        cancelAnimationFrame(state.rxRaf);
+        state.rxRaf = null;
+      }
+      if (state.rxStream) {
+        state.rxStream.getTracks().forEach(t => t.stop());
+        state.rxStream = null;
+      }
+      els.rxVideo.srcObject = null;
+      els.rxVideo.classList.add('hidden');
+      els.rxCamPlaceholder.classList.remove('hidden');
+      els.startCamBtn.disabled = false;
+      els.stopCamBtn.disabled = true;
+      els.rxDecoderStatus.textContent = 'Standby';
+      els.headerStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+      els.headerStatusText.textContent = 'Ready';
+    }
+
+    function autoCalibrate() {
+      const recent = state.waveform.slice(-20);
+      const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const suggested = Math.min(240, Math.max(25, Math.round(avg + 45)));
+      state.threshold = suggested;
+      els.thresholdSlider.value = suggested;
+      els.thresholdValLabel.textContent = suggested;
+      drawRxWaveform();
+      showToast(`Threshold calibrated to ${suggested} (ambient ~${Math.round(avg)})`, 'success');
+    }
+
+    function startSimulation() {
+      stopCameraReceiver();
+      stopSimulation();
+      const sampleMsg = 'HI LIGHT';
+      const encoded = state.protocol === 'morse'
+        ? encodeMorseTimeline(sampleMsg)
+        : encodeBinaryTimeline(sampleMsg);
+
+      state.rxSimulating = true;
+      state.rxLastEdgeTime = performance.now();
+      state.rxLastSampleTime = 0;
+      state.rxBinarySynced = false;
+      state.rxBitHistory = [];
+      state.rxCurrentSymbols = '';
+      els.rxDecoderStatus.textContent = 'Simulating Optical Signal...';
+      showToast(`Simulating incoming light for "${sampleMsg}"`, 'info');
+
+      let stepIdx = 0;
+      let stepEnd = performance.now() + encoded.steps[0].units * state.unitMs;
+
+      state.rxSimTimer = setInterval(() => {
+        if (!state.rxSimulating) return;
+        const now = performance.now();
+        if (now >= stepEnd) {
+          stepIdx++;
+          if (stepIdx >= encoded.steps.length) {
+            processOpticalSample(30, now + state.unitMs * 3);
+            stopSimulation();
+            els.rxDecoderStatus.textContent = 'Simulation Complete';
+            return;
+          }
+          stepEnd = now + encoded.steps[stepIdx].units * state.unitMs;
+        }
+        const isOn = encoded.steps[stepIdx].on;
+        const noise = (Math.random() - 0.5) * 12;
+        const simulatedLux = (isOn ? 230 : 35) + noise;
+        processOpticalSample(Math.max(0, Math.min(255, simulatedLux)), now);
+      }, 10);
+    }
+
+    function stopSimulation() {
+      state.rxSimulating = false;
+      if (state.rxSimTimer) {
+        clearInterval(state.rxSimTimer);
+        state.rxSimTimer = null;
+      }
+    }
+
+    function switchMode(mode) {
+      state.mode = mode;
+      if (mode === 'send') {
+        stopCameraReceiver();
+        stopSimulation();
+        els.sendPanel.classList.remove('hidden');
+        els.receivePanel.classList.add('hidden');
+        els.tabSend.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-amber-400 text-slate-950 shadow';
+        els.tabReceive.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white';
+      } else {
+        stopTransmission(false);
+        stopAlignBeam();
+        els.sendPanel.classList.add('hidden');
+        els.receivePanel.classList.remove('hidden');
+        els.tabReceive.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-sky-500 text-slate-950 shadow';
+        els.tabSend.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white';
+        drawRxWaveform();
+      }
+    }
+
+    els.tabSend.addEventListener('click', () => switchMode('send'));
+    els.tabReceive.addEventListener('click', () => switchMode('receive'));
+    els.startCamBtn.addEventListener('click', startCameraReceiver);
+    els.stopCamBtn.addEventListener('click', stopCameraReceiver);
+    els.thresholdSlider.addEventListener('input', (e) => {
+      state.threshold = Number(e.target.value);
+      els.thresholdValLabel.textContent = state.threshold;
+      drawRxWaveform();
+    });
+    els.autoCalibrateBtn.addEventListener('click', autoCalibrate);
+    els.simulateRxBtn.addEventListener('click', startSimulation);
+    els.clearDecodedBtn.addEventListener('click', () => {
+      state.decodedText = '';
+      state.rxCurrentSymbols = '';
+      state.rxBinaryBits = '';
+      state.rxBinarySynced = false;
+      els.rxBufferDisplay.textContent = '--';
+      renderDecodedText();
+    });
+    els.copyDecodedBtn.addEventListener('click', async () => {
+      if (!state.decodedText) {
+        showToast('Nothing to copy yet.', 'warn');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(state.decodedText);
+        showToast('Decoded message copied!', 'success');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = state.decodedText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast('Decoded message copied!', 'success');
+      }
+    });
+
+    // Initialize
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+    updatePreview();
+    drawTxWave();
+  </script>
+</body>
+</html>
